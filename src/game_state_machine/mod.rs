@@ -101,31 +101,53 @@ impl GameStateInfo {
         }
     }
 
-    fn change_flow_state(&self, flow_state: GameFlow) {
+    pub fn change_flow_state(
+        &mut self,
+        flow_state: GameFlow,
+        mut event_writer: &mut EventWriter<GameFlow>,
+    ) {
         match self.game_flow_state {
             GameFlow::Menu => match flow_state {
-                GameFlow::Menu => {}              //nothing
-                GameFlow::PlayerMovingBlock => {} // game is starting handle this until block is done then change state to checking rows
+                GameFlow::Menu => {} //nothing
+                GameFlow::PlayerMovingBlock => {
+                    self.game_flow_state = GameFlow::PlayerMovingBlock;
+                    event_writer.send(GameFlow::PlayerMovingBlock);
+                } // game is starting handle this until block is done then change state to checking rows
                 GameFlow::CheckingRows => {}
                 GameFlow::BlocksMovingAfterRowBreak => {} // move blocks until none can move then go back to checking rows
             },
             GameFlow::PlayerMovingBlock => match flow_state {
                 GameFlow::Menu => {}
                 GameFlow::PlayerMovingBlock => {}
-                GameFlow::CheckingRows => {} //check rows to see if any are filled. if so break them then send to blocks moving
+                GameFlow::CheckingRows => {
+                    self.game_flow_state = GameFlow::CheckingRows;
+                    event_writer.send(GameFlow::CheckingRows)
+                } //check rows to see if any are filled. if so break them then send to blocks moving
                 GameFlow::BlocksMovingAfterRowBreak => {}
             },
             GameFlow::CheckingRows => match flow_state {
                 GameFlow::Menu => {}
-                GameFlow::PlayerMovingBlock => {}
+                GameFlow::PlayerMovingBlock => {
+                    self.game_flow_state = GameFlow::PlayerMovingBlock;
+                    event_writer.send(GameFlow::PlayerMovingBlock)
+                }
                 GameFlow::CheckingRows => {}
-                GameFlow::BlocksMovingAfterRowBreak => {}
+                GameFlow::BlocksMovingAfterRowBreak => {
+                    self.game_flow_state = GameFlow::BlocksMovingAfterRowBreak;
+                    event_writer.send(GameFlow::BlocksMovingAfterRowBreak)
+                }
             },
             GameFlow::BlocksMovingAfterRowBreak => match flow_state {
                 GameFlow::Menu => {}
-                GameFlow::PlayerMovingBlock => {}
+                GameFlow::PlayerMovingBlock => {
+                    self.game_flow_state = GameFlow::PlayerMovingBlock;
+                    event_writer.send(GameFlow::PlayerMovingBlock)
+                }
                 GameFlow::CheckingRows => {}
-                GameFlow::BlocksMovingAfterRowBreak => {}
+                GameFlow::BlocksMovingAfterRowBreak => {
+                    self.game_flow_state = GameFlow::BlocksMovingAfterRowBreak;
+                    event_writer.send(GameFlow::BlocksMovingAfterRowBreak)
+                }
             },
         }
     }

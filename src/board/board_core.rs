@@ -1,15 +1,18 @@
-﻿use bevy::math::vec3;
+﻿use crate::FlexDirection::Row;
+use bevy::math::vec3;
 use bevy::prelude::*;
 use bevy::reflect::List;
 use std::collections::HashMap;
 use std::option::Option;
 use std::process::id;
+use crate::ScoreEvent;
 
 pub struct BoardPlugin;
 
 impl Plugin for BoardPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<BoardData>()
+        app
+            .init_resource::<BoardData>()
             .insert_resource(BlockId {highest_block_id: 1 })
             .add_startup_system(setup_board)
             //.add_startup_system(fill_board_test) //For testing the board to make sure it fills and is right
@@ -48,7 +51,7 @@ pub struct BlockId {
 impl FromWorld for BlockId {
     fn from_world(world: &mut World) -> Self {
         BlockId {
-            highest_block_id: 1,
+            highest_block_id: 0,
         }
     }
 }
@@ -159,11 +162,6 @@ impl BoardPointCoordinates {
             0.,
         )
     }
-}
-
-#[derive(Component)]
-pub struct BoardPointWorldPosition {
-    coordinates: Vec3,
 }
 
 //piece components
@@ -470,7 +468,7 @@ pub fn spawn_new_block(
     board_data: &mut ResMut<BoardData>,
     piece_type: PieceType,
     asset_server: &Res<AssetServer>,
-    mut highest_block_id: &mut ResMut<BlockId>,
+    highest_block_id: &mut ResMut<BlockId>,
 ) {
     Piece::new(
         piece_type,
@@ -500,7 +498,7 @@ pub fn move_all_pieces(
     {
         let &id_can_move = hashmap_of_moves.get(&id.id).unwrap();
         //info!(id_can_move);
-        info!("{}: block can move = {}", id.id, id_can_move);
+        //info!("{}: block can move = {}", id.id, id_can_move);
 
         if id_can_move == true {
             let point = board_data
@@ -536,7 +534,6 @@ pub fn move_all_pieces(
             commands.entity(entity).remove::<CurrentPlayerControlled>();
         }
     }
-    //info!("something moved: {}", something_moved);
     something_moved
 }
 
@@ -553,14 +550,17 @@ fn check_all_pieces_move_validity(
     let mut hashmap = HashMap::new();
 
     for (_entity, id, coords, _transform, _player_controlled_block) in blocks_query.iter() {
+        //info!("loop run");
         if let Some(point) = board_data.board_points.get(&IVec2 {
             x: coords.coordinates.x,
             y: coords.coordinates.y - 1,
         }) {
+            //info!(point.is_full, point.id);
             if point.is_full && point.id > 0 && point.id != id.id {
                 hashmap.insert(id.id, false);
             } else if hashmap.contains_key(&id.id) == false {
                 hashmap.insert(id.id, true);
+            } else {
             }
         } else {
             hashmap.insert(id.id, false);
@@ -642,4 +642,68 @@ fn check_individual_piece_move(
         }
     }
     move_valid
+}
+
+pub fn update_board_data(
+    mut board_data:ResMut<BoardData>,
+    mut blocks_query: Query<(
+        Entity,
+        &BlockID,
+        &mut BoardPointCoordinates,
+        &mut Transform,
+        Option<&CurrentPlayerControlled>,
+    )>,
+) {
+    for (entity, id, mut coords, mut _transform, _player_controlled_block) in
+        blocks_query.iter_mut()
+    {
+        let new_point = board_data
+            .board_points
+            .get_mut(&coords.coordinates)
+            .unwrap();
+
+        new_point.is_full = true;
+        new_point.id = id.id;
+        new_point.entity_in_point = Option::from(entity);
+    }
+}
+
+pub fn check_each_row(
+    mut score_event: &mut EventWriter<ScoreEvent>,
+    mut board_data: &mut ResMut<BoardData>,
+    commands: &mut Commands,
+) -> bool {
+    
+    let mut row_deleted: bool = false;
+    let mut rows_deleted: i32 = 0;
+    
+    for y in 0..BOARD_HEIGHT {
+        let mut blocks_in_row_count: i32 = 0;
+
+        for x in 0..BOARD_WIDTH {
+            if let Some(point) = board_data.board_points.get(&IVec2 { x, y }) {
+                if point.is_full {
+                    blocks_in_row_count += 1;
+                }
+            }
+        }
+
+        if blocks_in_row_count == BOARD_WIDTH {
+            row_deleted = true;
+            rows_deleted += 1;
+            for i in 0..BOARD_WIDTH {
+                if let Some(point) = board_data.board_points.get_mut(&IVec2 { x: i, y }) {
+                    point.is_full = false;
+                    point.id = 0;
+
+                    commands.entity(point.entity_in_point.unwrap()).despawn();
+
+                    point.entity_in_point = None;
+
+                }
+            }
+        }
+    }
+    score_event.send(ScoreEvent {score: rows_deleted as u64});
+    row_deleted
 }
